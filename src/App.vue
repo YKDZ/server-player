@@ -11,7 +11,9 @@ const currentTime = ref(0)
 const isSeeking = ref(false)
 const isPlaying = ref(false)
 const showControls = ref(true)
+const totalTraffic = ref(0)
 let controlsTimeout: number | null = null
+let performanceObserver: PerformanceObserver | null = null
 
 onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
@@ -22,6 +24,12 @@ onMounted(async () => {
     const saved = localStorage.getItem(`progress-${videoUrl.value}`)
     if (saved) {
       savedTime.value = parseFloat(saved)
+    }
+
+    // Restore traffic stats
+    const savedTraffic = localStorage.getItem('total-traffic')
+    if (savedTraffic) {
+      totalTraffic.value = parseFloat(savedTraffic)
     }
 
     // Fetch metadata
@@ -38,12 +46,30 @@ onMounted(async () => {
 
   document.addEventListener('mousemove', handleUserActivity)
   document.addEventListener('keydown', handleKeydown)
+
+  // Setup PerformanceObserver to track traffic
+  if (window.PerformanceObserver) {
+    performanceObserver = new PerformanceObserver((list) => {
+      list.getEntries().forEach((entry) => {
+        if (entry.entryType === 'resource' && entry.name.includes('/api/stream')) {
+          const r = entry as PerformanceResourceTiming
+          const size = r.transferSize || r.encodedBodySize || 0
+          if (size > 0) {
+            totalTraffic.value += size
+            localStorage.setItem('total-traffic', totalTraffic.value.toString())
+          }
+        }
+      })
+    })
+    performanceObserver.observe({ type: 'resource', buffered: true })
+  }
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleUserActivity)
   document.removeEventListener('keydown', handleKeydown)
   if (controlsTimeout) clearTimeout(controlsTimeout)
+  if (performanceObserver) performanceObserver.disconnect()
 })
 
 const handleUserActivity = () => {
@@ -146,6 +172,14 @@ const formatTime = (seconds: number) => {
   const m = Math.floor((seconds % 3600) / 60)
   const s = Math.floor(seconds % 60)
   return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
+}
+
+const formatSize = (bytes: number) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
 const onLoadedMetadata = () => {
@@ -294,7 +328,8 @@ const onLoadedMetadata = () => {
       <div
         class="absolute top-4 left-4 bg-black/50 backdrop-blur px-3 py-1 rounded text-xs text-white/70 pointer-events-none"
       >
-        Source: {{ videoUrl.substring(0, 20) }}...
+        <p>Source: {{ videoUrl.substring(0, 20) }}...</p>
+        <p>Traffic: {{ formatSize(totalTraffic) }}</p>
       </div>
     </div>
   </div>
