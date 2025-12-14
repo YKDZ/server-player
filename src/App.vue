@@ -145,21 +145,17 @@ const onTimeUpdate = () => {
   }
 }
 
-const onSeek = (e: Event) => {
-  const target = e.target as HTMLInputElement
-  const newTime = parseFloat(target.value)
+const onSeek = () => {
+  const newTime = currentTime.value
 
   isReloading.value = true
   savedTime.value = newTime
   currentStreamStart.value = newTime
-  currentTime.value = newTime
   isSeeking.value = false
 }
 
-const onSeeking = (e: Event) => {
+const onSeeking = () => {
   isSeeking.value = true
-  const target = e.target as HTMLInputElement
-  currentTime.value = parseFloat(target.value)
 }
 
 const seekRelative = (seconds: number) => {
@@ -251,7 +247,7 @@ const onLoadedMetadata = () => {
               type="range"
               min="0"
               :max="duration"
-              :value="currentTime"
+              v-model.number="currentTime"
               @change="onSeek"
               @input="onSeeking"
               class="absolute w-full h-full opacity-0 z-10 cursor-pointer"
@@ -327,7 +323,7 @@ const onLoadedMetadata = () => {
               <!-- Dropdown (upwards) -->
               <div
                 v-if="showQualityMenu"
-                class="absolute bottom-full right-0 mb-2 bg-black/90 border border-white/10 rounded overflow-hidden min-w-[80px]"
+                class="absolute bottom-full right-0 mb-2 bg-black/90 border border-white/10 rounded overflow-hidden min-w-20"
               >
                 <button
                   v-for="q in qualities"
@@ -348,7 +344,6 @@ const onLoadedMetadata = () => {
       <div
         class="absolute top-4 left-4 bg-black/50 backdrop-blur px-3 py-1 rounded text-xs text-white/70 pointer-events-none"
       >
-        <p>Source: {{ videoUrl.substring(0, 20) }}...</p>
         <p>Traffic: {{ formatSize(totalTraffic) }}</p>
       </div>
     </div>
