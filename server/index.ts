@@ -52,20 +52,45 @@ app.get('/api/stream', async (req, res) => {
     if (quality === 'audio') {
       ffmpegCommand.noVideo().audioCodec('libmp3lame').format('mp3')
     } else {
-      ffmpegCommand.videoCodec('libx264').audioCodec('aac').format('mp4').outputOptions([
-        '-movflags frag_keyframe+empty_moov', // Essential for streaming MP4
-        '-preset ultrafast', // Low latency
-        '-crf 23', // Reasonable quality
-      ])
+      const useHwAccel = process.env.HW_ACCEL === 'true' || process.env.HW_ACCEL === '1'
 
-      if (quality === '1080p') {
-        ffmpegCommand.size('?x1080')
-      } else if (quality === '720p') {
-        ffmpegCommand.size('?x720')
-      } else if (quality === '480p') {
-        ffmpegCommand.size('?x480')
+      if (useHwAccel) {
+        console.log('Using Hardware Acceleration (VAAPI)')
+        ffmpegCommand
+          .inputOptions([
+            '-hwaccel vaapi',
+            '-hwaccel_device /dev/dri/renderD128',
+            '-hwaccel_output_format vaapi',
+          ])
+          .videoCodec('h264_vaapi')
+          .audioCodec('aac')
+          .format('mp4')
+          .outputOptions(['-movflags frag_keyframe+empty_moov'])
+
+        let scaleFilter = ''
+        if (quality === '1080p') scaleFilter = 'scale_vaapi=w=-2:h=1080'
+        else if (quality === '720p') scaleFilter = 'scale_vaapi=w=-2:h=720'
+        else if (quality === '480p') scaleFilter = 'scale_vaapi=w=-2:h=480'
+
+        if (scaleFilter) {
+          ffmpegCommand.outputOptions(`-vf ${scaleFilter}`)
+        }
+      } else {
+        ffmpegCommand.videoCodec('libx264').audioCodec('aac').format('mp4').outputOptions([
+          '-movflags frag_keyframe+empty_moov', // Essential for streaming MP4
+          '-preset ultrafast', // Low latency
+          '-crf 23', // Reasonable quality
+        ])
+
+        if (quality === '1080p') {
+          ffmpegCommand.size('?x1080')
+        } else if (quality === '720p') {
+          ffmpegCommand.size('?x720')
+        } else if (quality === '480p') {
+          ffmpegCommand.size('?x480')
+        }
+        // Default or 'original' keeps original size
       }
-      // Default or 'original' keeps original size
     }
 
     ffmpegCommand
