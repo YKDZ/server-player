@@ -6,9 +6,12 @@ const quality = ref('720p')
 const qualities = ['1080p', '720p', '480p', 'audio']
 const videoRef = ref<HTMLVideoElement | null>(null)
 const savedTime = ref(0)
+const duration = ref(0)
+const currentTime = ref(0)
+const isSeeking = ref(false)
 
 // Get URL from query params
-onMounted(() => {
+onMounted(async () => {
   const params = new URLSearchParams(window.location.search)
   const urlParam = params.get('url')
   if (urlParam) {
@@ -18,6 +21,17 @@ onMounted(() => {
     if (saved) {
       savedTime.value = parseFloat(saved)
       console.log('Restored time:', savedTime.value)
+    }
+
+    // Fetch metadata
+    try {
+      const res = await fetch(`/api/metadata?url=${encodeURIComponent(videoUrl.value)}`)
+      const data = await res.json()
+      if (data.duration) {
+        duration.value = parseFloat(data.duration)
+      }
+    } catch (e) {
+      console.error('Failed to fetch metadata', e)
     }
   }
 })
@@ -47,11 +61,36 @@ const onTimeUpdate = () => {
     )
     const absoluteTime = currentOffset + videoRef.value.currentTime
 
+    if (!isSeeking.value) {
+      currentTime.value = absoluteTime
+    }
+
     // Only update if we are playing (to avoid overwriting with 0 on load)
     if (!videoRef.value.paused) {
       localStorage.setItem(`progress-${videoUrl.value}`, absoluteTime.toString())
     }
   }
+}
+
+const onSeek = (e: Event) => {
+  const target = e.target as HTMLInputElement
+  const newTime = parseFloat(target.value)
+  savedTime.value = newTime
+  currentTime.value = newTime
+  isSeeking.value = false
+}
+
+const onSeeking = (e: Event) => {
+  isSeeking.value = true
+  const target = e.target as HTMLInputElement
+  currentTime.value = parseFloat(target.value)
+}
+
+const formatTime = (seconds: number) => {
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  const s = Math.floor(seconds % 60)
+  return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`
 }
 
 const onLoadedMetadata = () => {
@@ -78,6 +117,19 @@ const onLoadedMetadata = () => {
         >
           <option v-for="q in qualities" :key="q" :value="q">{{ q }}</option>
         </select>
+      </div>
+
+      <div class="seek-bar" v-if="duration > 0">
+        <span>{{ formatTime(currentTime) }}</span>
+        <input
+          type="range"
+          min="0"
+          :max="duration"
+          :value="currentTime"
+          @change="onSeek"
+          @input="onSeeking"
+        />
+        <span>{{ formatTime(duration) }}</span>
       </div>
 
       <video
@@ -121,6 +173,23 @@ const onLoadedMetadata = () => {
   padding: 10px;
   border-radius: 4px;
   display: inline-block;
+}
+
+.seek-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  background: #222;
+  padding: 10px;
+  border-radius: 4px;
+}
+
+.seek-bar input[type='range'] {
+  width: 100%;
+  max-width: 600px;
+  cursor: pointer;
 }
 
 select {

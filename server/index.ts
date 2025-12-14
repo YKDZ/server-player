@@ -13,6 +13,31 @@ const port = 3000
 app.use(cors())
 app.use(express.json())
 
+app.get('/api/metadata', async (req, res) => {
+  try {
+    const { url } = req.query
+
+    if (!url || typeof url !== 'string') {
+      res.status(400).send('Missing or invalid url parameter')
+      return
+    }
+
+    const decodedUrl = Buffer.from(url, 'base64').toString('utf-8')
+
+    ffmpeg.ffprobe(decodedUrl, (err, metadata) => {
+      if (err) {
+        console.error('FFprobe error:', err)
+        res.status(500).send('Error fetching metadata')
+        return
+      }
+      res.json({ duration: metadata.format.duration })
+    })
+  } catch (error) {
+    console.error(error)
+    res.status(500).send('Internal Server Error')
+  }
+})
+
 app.get('/api/stream', async (req, res) => {
   try {
     const { url, quality, start } = req.query
