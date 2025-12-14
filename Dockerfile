@@ -4,7 +4,8 @@ FROM node:20-slim
 ARG APT_MIRROR
 RUN if [ -n "$APT_MIRROR" ]; then \
     sed -i "s|deb.debian.org|$APT_MIRROR|g" /etc/apt/sources.list.d/debian.sources; \
-    fi
+    fi && \
+    sed -i "s|Components: main|Components: main contrib non-free non-free-firmware|g" /etc/apt/sources.list.d/debian.sources
 
 # Install ffmpeg and intel vaapi drivers
 RUN apt-get update && apt-get install -y ffmpeg intel-media-va-driver-non-free && rm -rf /var/lib/apt/lists/*
