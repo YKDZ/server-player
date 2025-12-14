@@ -1,0 +1,7 @@
+node_modules
+dist
+.vscode
+Dockerfile
+\*compose.yml
+.env
+README.md
