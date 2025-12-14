@@ -16,6 +16,7 @@ const showQualityMenu = ref(false)
 const totalTraffic = ref(0)
 const currentStreamStart = ref(0)
 let controlsTimeout: number | null = null
+let seekTimeout: number | null = null
 let performanceObserver: PerformanceObserver | null = null
 
 onMounted(async () => {
@@ -76,6 +77,7 @@ onUnmounted(() => {
   document.removeEventListener('keydown', handleKeydown)
   document.removeEventListener('click', handleClickOutside)
   if (controlsTimeout) clearTimeout(controlsTimeout)
+  if (seekTimeout) clearTimeout(seekTimeout)
   if (performanceObserver) performanceObserver.disconnect()
 })
 
@@ -163,10 +165,17 @@ const seekRelative = (seconds: number) => {
   if (newTime < 0) newTime = 0
   if (duration.value > 0 && newTime > duration.value) newTime = duration.value
 
-  isReloading.value = true
-  savedTime.value = newTime
-  currentStreamStart.value = newTime
   currentTime.value = newTime
+  isSeeking.value = true
+
+  if (seekTimeout) clearTimeout(seekTimeout)
+  seekTimeout = setTimeout(() => {
+    isReloading.value = true
+    savedTime.value = newTime
+    currentStreamStart.value = newTime
+    isSeeking.value = false
+    seekTimeout = null
+  }, 500)
 }
 
 const togglePlay = () => {
