@@ -10,8 +10,11 @@ const duration = ref(0)
 const currentTime = ref(0)
 const isSeeking = ref(false)
 const isPlaying = ref(false)
+const isReloading = ref(false)
 const showControls = ref(true)
+const showQualityMenu = ref(false)
 const totalTraffic = ref(0)
+const currentStreamStart = ref(0)
 let controlsTimeout: number | null = null
 let performanceObserver: PerformanceObserver | null = null
 
@@ -24,6 +27,7 @@ onMounted(async () => {
     const saved = localStorage.getItem(`progress-${videoUrl.value}`)
     if (saved) {
       savedTime.value = parseFloat(saved)
+      currentStreamStart.value = savedTime.value
     }
 
     // Restore traffic stats
@@ -46,12 +50,14 @@ onMounted(async () => {
 
   document.addEventListener('mousemove', handleUserActivity)
   document.addEventListener('keydown', handleKeydown)
+  document.addEventListener('click', handleClickOutside)
 
   // Setup PerformanceObserver to track traffic
   if (window.PerformanceObserver) {
     performanceObserver = new PerformanceObserver((list) => {
       list.getEntries().forEach((entry) => {
-        if (entry.entryType === 'resource' && entry.name.includes('/api/stream')) {
+        // Looser check for stream URL to handle relative/absolute paths
+        if (entry.entryType === 'resource' && entry.name.includes('api/stream')) {
           const r = entry as PerformanceResourceTiming
           const size = r.transferSize || r.encodedBodySize || 0
           if (size > 0) {
@@ -68,15 +74,23 @@ onMounted(async () => {
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleUserActivity)
   document.removeEventListener('keydown', handleKeydown)
+  document.removeEventListener('click', handleClickOutside)
   if (controlsTimeout) clearTimeout(controlsTimeout)
   if (performanceObserver) performanceObserver.disconnect()
 })
+
+const handleClickOutside = (e: MouseEvent) => {
+  const target = e.target as HTMLElement
+  if (!target.closest('.quality-selector')) {
+    showQualityMenu.value = false
+  }
+}
 
 const handleUserActivity = () => {
   showControls.value = true
   if (controlsTimeout) clearTimeout(controlsTimeout)
   controlsTimeout = setTimeout(() => {
-    if (isPlaying.value) {
+    if (isPlaying.value && !showQualityMenu.value) {
       showControls.value = false
     }
   }, 3000)
@@ -103,21 +117,20 @@ const streamUrl = computed(() => {
 
 const changeQuality = (newQuality: string) => {
   if (videoRef.value) {
-    const currentOffset = parseFloat(
-      new URLSearchParams(streamUrl.value.split('?')[1]).get('start') || '0',
-    )
-    const absoluteTime = currentOffset + videoRef.value.currentTime
+    isReloading.value = true
+    const absoluteTime = currentStreamStart.value + videoRef.value.currentTime
     savedTime.value = absoluteTime
+    currentStreamStart.value = absoluteTime
   }
   quality.value = newQuality
+  showQualityMenu.value = false
 }
 
 const onTimeUpdate = () => {
+  if (isReloading.value) return
+
   if (videoRef.value && videoUrl.value) {
-    const currentOffset = parseFloat(
-      new URLSearchParams(streamUrl.value.split('?')[1]).get('start') || '0',
-    )
-    const absoluteTime = currentOffset + videoRef.value.currentTime
+    const absoluteTime = currentStreamStart.value + videoRef.value.currentTime
 
     if (!isSeeking.value) {
       currentTime.value = absoluteTime
@@ -135,7 +148,10 @@ const onTimeUpdate = () => {
 const onSeek = (e: Event) => {
   const target = e.target as HTMLInputElement
   const newTime = parseFloat(target.value)
+
+  isReloading.value = true
   savedTime.value = newTime
+  currentStreamStart.value = newTime
   currentTime.value = newTime
   isSeeking.value = false
 }
@@ -151,7 +167,9 @@ const seekRelative = (seconds: number) => {
   if (newTime < 0) newTime = 0
   if (duration.value > 0 && newTime > duration.value) newTime = duration.value
 
+  isReloading.value = true
   savedTime.value = newTime
+  currentStreamStart.value = newTime
   currentTime.value = newTime
 }
 
@@ -183,13 +201,13 @@ const formatSize = (bytes: number) => {
 }
 
 const onLoadedMetadata = () => {
+  isReloading.value = false
   if (videoRef.value) {
     videoRef.value.play().catch((e) => console.error('Auto-play failed', e))
     isPlaying.value = true
   }
 }
 </script>
-
 <template>
   <div class="relative w-full h-screen bg-black overflow-hidden group select-none">
     <div v-if="!videoUrl" class="flex flex-col items-center justify-center h-full text-white">
@@ -220,12 +238,12 @@ const onLoadedMetadata = () => {
 
       <!-- Controls Overlay -->
       <div
-        class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent px-6 pb-6 pt-12 transition-opacity duration-300"
+        class="absolute bottom-0 left-0 right-0 bg-linear-to-t from-black/90 via-black/60 to-transparent px-6 pb-6 pt-12 transition-opacity duration-300"
         :class="{ 'opacity-0': !showControls, 'opacity-100': showControls }"
       >
         <!-- Seek Bar -->
         <div class="flex items-center gap-4 mb-4" v-if="duration > 0">
-          <span class="text-white text-sm font-mono min-w-[60px] text-right">{{
+          <span class="text-white text-sm font-mono min-w-15 text-right">{{
             formatTime(currentTime)
           }}</span>
           <div class="relative flex-1 h-2 group/slider cursor-pointer">
@@ -254,7 +272,7 @@ const onLoadedMetadata = () => {
               </div>
             </div>
           </div>
-          <span class="text-white text-sm font-mono min-w-[60px]">{{ formatTime(duration) }}</span>
+          <span class="text-white text-sm font-mono min-w-15">{{ formatTime(duration) }}</span>
         </div>
 
         <!-- Bottom Controls Row -->
@@ -299,15 +317,17 @@ const onLoadedMetadata = () => {
 
           <div class="flex items-center gap-4">
             <!-- Quality Selector -->
-            <div class="relative group/quality">
+            <div class="relative group/quality quality-selector">
               <button
+                @click.stop="showQualityMenu = !showQualityMenu"
                 class="text-white font-medium hover:text-blue-400 transition-colors px-2 py-1 rounded border border-white/20 bg-black/50 backdrop-blur-sm"
               >
                 {{ quality }}
               </button>
               <!-- Dropdown (upwards) -->
               <div
-                class="absolute bottom-full right-0 mb-2 hidden group-hover/quality:block bg-black/90 border border-white/10 rounded overflow-hidden min-w-[80px]"
+                v-if="showQualityMenu"
+                class="absolute bottom-full right-0 mb-2 bg-black/90 border border-white/10 rounded overflow-hidden min-w-[80px]"
               >
                 <button
                   v-for="q in qualities"
