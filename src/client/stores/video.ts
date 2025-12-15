@@ -6,108 +6,117 @@ export const qualities = ['1080p', '720p', '480p', '360p', 'audio']
 
 type Quality = (typeof qualities)[number]
 
-export const useVideoStore = defineStore('video', () => {
-  const urlBase64 = ref('')
-  const quality = ref<Quality>('720p')
-  const volume = ref(0.8)
-  const previousVolume = ref(0.8)
+export const useVideoStore = defineStore(
+  'video',
+  () => {
+    const urlBase64 = ref('')
+    const quality = ref<Quality>('720p')
+    const volume = ref(0.8)
+    const previousVolume = ref(0.8)
 
-  const [isPlaying, togglePlay] = useToggle()
-  const [isReloading, toggleReloading] = useToggle()
-  const [isSeeking, toggleSeeking] = useToggle()
+    const [isPlaying, togglePlay] = useToggle()
+    const [isReloading, toggleReloading] = useToggle()
+    const [isSeeking, toggleSeeking] = useToggle()
 
-  const startTime = ref(0)
-  const currentTime = ref(0)
+    const startTime = ref(0)
+    const currentTime = ref(0)
 
-  const videoEl = shallowRef<HTMLVideoElement>()
+    const videoEl = shallowRef<HTMLVideoElement>()
 
-  const isHandlingProgressChange = ref(false)
+    const isHandlingProgressChange = ref(false)
 
-  const streamUrl = computed(() => {
-    if (!urlBase64.value) return ''
-    return `/api/stream?url=${encodeURIComponent(urlBase64.value)}&quality=${quality.value}&start=${Math.floor(startTime.value)}`
-  })
+    const streamUrl = computed(() => {
+      if (!urlBase64.value) return ''
+      return `/api/stream?url=${encodeURIComponent(urlBase64.value)}&quality=${quality.value}&start=${Math.floor(startTime.value)}`
+    })
 
-  const totalTime = computedAsync(async () => {
-    if (!streamUrl.value) return
+    const totalTime = computedAsync(async () => {
+      if (!streamUrl.value) return
 
-    try {
-      const res = await fetch(`/api/metadata?url=${encodeURIComponent(urlBase64.value)}`)
-      const data = await res.json()
-      if (data.duration) {
-        return parseFloat(data.duration)
+      try {
+        const res = await fetch(`/api/metadata?url=${encodeURIComponent(urlBase64.value)}`)
+        const data = await res.json()
+        if (data.duration) {
+          return parseFloat(data.duration)
+        }
+      } catch (e) {
+        console.error('Failed to fetch metadata', e)
       }
-    } catch (e) {
-      console.error('Failed to fetch metadata', e)
+    })
+
+    const progress = computed(() => {
+      if (!totalTime.value) return 0
+      return (currentTime.value / totalTime.value) * 100
+    })
+
+    const setVolume = (value: number) => {
+      previousVolume.value = volume.value
+      volume.value = value
     }
-  })
 
-  const progress = computed(() => {
-    if (!totalTime.value) return 0
-    return (currentTime.value / totalTime.value) * 100
-  })
+    const restoreVolume = () => {
+      const temp = volume.value
+      volume.value = previousVolume.value
+      previousVolume.value = temp
+    }
 
-  const setVolume = (value: number) => {
-    previousVolume.value = volume.value
-    volume.value = value
-  }
+    const play = () => {
+      if (!videoEl.value || isPlaying.value) return
 
-  const restoreVolume = () => {
-    const temp = volume.value
-    volume.value = previousVolume.value
-    previousVolume.value = temp
-  }
+      isPlaying.value = true
+      videoEl.value.play()
+    }
 
-  const play = () => {
-    if (!videoEl.value || isPlaying.value) return
+    const pause = () => {
+      if (!videoEl.value || !isPlaying.value) return
 
-    isPlaying.value = true
-    videoEl.value.play()
-  }
+      isPlaying.value = false
+      videoEl.value.pause()
+    }
 
-  const pause = () => {
-    if (!videoEl.value || !isPlaying.value) return
+    const seek = useDebounceFn((to: number) => {
+      if (!totalTime.value) {
+        isHandlingProgressChange.value = false
+        return
+      }
 
-    isPlaying.value = false
-    videoEl.value.pause()
-  }
+      const newStartTime = (to / 100) * totalTime.value
+      startTime.value = newStartTime
+      currentTime.value = newStartTime
 
-  const seek = useDebounceFn((to: number) => {
-    if (!totalTime.value) {
+      play()
+
       isHandlingProgressChange.value = false
-      return
+    }, 500)
+
+    return {
+      urlBase64,
+      isPlaying,
+      togglePlay,
+      isReloading,
+      toggleReloading,
+      isSeeking,
+      toggleSeeking,
+      startTime,
+      totalTime,
+      currentTime,
+      videoEl,
+      streamUrl,
+      play,
+      pause,
+      seek,
+      setVolume,
+      restoreVolume,
+      volume,
+      progress,
+      quality,
+      isHandlingProgressChange,
     }
-
-    const newStartTime = (to / 100) * totalTime.value
-    startTime.value = newStartTime
-    currentTime.value = newStartTime
-
-    play()
-
-    isHandlingProgressChange.value = false
-  }, 500)
-
-  return {
-    urlBase64,
-    isPlaying,
-    togglePlay,
-    isReloading,
-    toggleReloading,
-    isSeeking,
-    toggleSeeking,
-    startTime,
-    totalTime,
-    currentTime,
-    videoEl,
-    streamUrl,
-    play,
-    pause,
-    seek,
-    setVolume,
-    restoreVolume,
-    volume,
-    progress,
-    quality,
-    isHandlingProgressChange,
-  }
-})
+  },
+  {
+    persist: {
+      storage: localStorage,
+      pick: ['volume', 'quality'],
+    },
+  },
+)
