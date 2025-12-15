@@ -4,21 +4,20 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import vueDevTools from 'vite-plugin-vue-devtools'
 import tailwindcss from '@tailwindcss/vite'
+import { resolve } from 'node:path'
 
-// https://vite.dev/config/
 export default defineConfig({
   plugins: [vue(), vueDevTools(), tailwindcss()],
+
+  root: 'src/client',
   resolve: {
     alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '@': resolve(__dirname, './src/client'),
     },
   },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-    },
+
+  build: {
+    emptyOutDir: true,
+    outDir: '../../dist/client',
   },
 })
