@@ -14,6 +14,7 @@ const {
   startTime,
   quality,
   totalTime,
+  isHandlingProgressChange,
 } = storeToRefs(useVideoStore())
 
 const videoEl = useTemplateRef<HTMLVideoElement>('videoEl')
@@ -28,7 +29,16 @@ let mediaSource: MediaSource | null = null
 const { play, pause, seek, setVolume, restoreVolume } = useVideoStore()
 
 const onTimeUpdate = () => {
+  if (isHandlingProgressChange.value) return
   currentTime.value = startTime.value + (videoEl.value?.currentTime ?? 0)
+}
+
+const onProgressInput = (event: Event) => {
+  isHandlingProgressChange.value = true
+  const value = Number((event.target as HTMLInputElement).value)
+  if (totalTime.value) {
+    currentTime.value = (value / 100) * totalTime.value
+  }
 }
 
 const onProgressChange = (event: Event) => {
@@ -324,7 +334,7 @@ watch(videoEl, (el) => {
             {{ formatBytes(totalBytes) }}
           </span>
         </div>
-        <div class="flex items-center justify-between w-36 gap-1">
+        <div class="flex items-center justify-between w-36 gap-1 hover:cursor-pointer">
           <div
             class="text-gray-100 text-2xl"
             @click="volume !== 0 ? setVolume(0) : restoreVolume()"
@@ -367,6 +377,7 @@ watch(videoEl, (el) => {
             :value="progress"
             step="0.01"
             class="flex-1 h-1 rounded accent-white cursor-pointer"
+            @input="onProgressInput"
             @change="onProgressChange"
           />
           <span class="text-gray-300 text-center text-sm font-mono">

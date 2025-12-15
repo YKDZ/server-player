@@ -21,6 +21,8 @@ export const useVideoStore = defineStore('video', () => {
 
   const videoEl = shallowRef<HTMLVideoElement>()
 
+  const isHandlingProgressChange = ref(false)
+
   const streamUrl = computed(() => {
     if (!urlBase64.value) return ''
     return `/api/stream?url=${encodeURIComponent(urlBase64.value)}&quality=${quality.value}&start=${Math.floor(startTime.value)}`
@@ -71,11 +73,18 @@ export const useVideoStore = defineStore('video', () => {
   }
 
   const seek = useDebounceFn((to: number) => {
-    if (!totalTime.value) return
+    if (!totalTime.value) {
+      isHandlingProgressChange.value = false
+      return
+    }
 
-    startTime.value = (to / 100) * totalTime.value
-    currentTime.value = 0
+    const newStartTime = (to / 100) * totalTime.value
+    startTime.value = newStartTime
+    currentTime.value = newStartTime
+
     play()
+
+    isHandlingProgressChange.value = false
   }, 500)
 
   return {
@@ -99,5 +108,6 @@ export const useVideoStore = defineStore('video', () => {
     volume,
     progress,
     quality,
+    isHandlingProgressChange,
   }
 })
