@@ -2,7 +2,7 @@ import { computedAsync, useDebounceFn, useToggle } from '@vueuse/core'
 import { defineStore } from 'pinia'
 import { computed, ref, shallowRef } from 'vue'
 
-export const qualities = ['1080p', '720p', '480p', 'audio']
+export const qualities = ['1080p', '720p', '480p', '360p', 'audio']
 
 type Quality = (typeof qualities)[number]
 
@@ -10,6 +10,7 @@ export const useVideoStore = defineStore('video', () => {
   const urlBase64 = ref('')
   const quality = ref<Quality>('720p')
   const volume = ref(0.8)
+  const previousVolume = ref(0.8)
 
   const [isPlaying, togglePlay] = useToggle()
   const [isReloading, toggleReloading] = useToggle()
@@ -43,6 +44,17 @@ export const useVideoStore = defineStore('video', () => {
     if (!totalTime.value) return 0
     return (currentTime.value / totalTime.value) * 100
   })
+
+  const setVolume = (value: number) => {
+    previousVolume.value = volume.value
+    volume.value = value
+  }
+
+  const restoreVolume = () => {
+    const temp = volume.value
+    volume.value = previousVolume.value
+    previousVolume.value = temp
+  }
 
   const play = () => {
     if (!videoEl.value || isPlaying.value) return
@@ -82,6 +94,8 @@ export const useVideoStore = defineStore('video', () => {
     play,
     pause,
     seek,
+    setVolume,
+    restoreVolume,
     volume,
     progress,
     quality,

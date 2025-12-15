@@ -83,12 +83,13 @@ app.get('/api/stream', async (c) => {
       '-c:a',
       'aac',
       '-movflags',
-      'frag_keyframe+empty_moov',
+      'frag_keyframe+empty_moov+default_base_moof',
     )
 
     if (quality === '1080p') args.push('-vf', 'scale_vaapi=w=-2:h=1080')
     if (quality === '720p') args.push('-vf', 'scale_vaapi=w=-2:h=720')
     if (quality === '480p') args.push('-vf', 'scale_vaapi=w=-2:h=480')
+    if (quality === '360p') args.push('-vf', 'scale_vaapi=w=-2:h=360')
 
     args.push('-f', 'mp4', 'pipe:1')
   } else {
@@ -102,12 +103,13 @@ app.get('/api/stream', async (c) => {
       '-crf',
       '23',
       '-movflags',
-      'frag_keyframe+empty_moov',
+      'frag_keyframe+empty_moov+default_base_moof',
     )
 
     if (quality === '1080p') args.push('-vf', 'scale=-2:1080')
     if (quality === '720p') args.push('-vf', 'scale=-2:720')
     if (quality === '480p') args.push('-vf', 'scale=-2:480')
+    if (quality === '360p') args.push('-vf', 'scale=-2:360')
 
     args.push('-f', 'mp4', 'pipe:1')
   }
